@@ -1,8 +1,6 @@
 package ncku.hpds.tzulitai.mapreduce.svm.cascade;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.EnumMap;
 import java.util.Random;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -13,7 +11,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -29,7 +26,18 @@ import java.lang.Math;
 
 import libsvm.*;
 
+/*
+ * Currently only supports 2-class SVM training.
+ */
+
 public class CascadeSvm {
+	
+	/*
+	 * PreStatCounterMapper simply counts three values:
+	 * 		- TOTAL_RECORD_COUNT: The total amount of records in the whole training data set.
+	 * 		- CLASS_1_COUNT: The total amount of records with label of class 1.
+	 * 		- CLASS_2_COUNT: The total amount of records with label of class 2.
+	 */
 	
 	public static class PreStatCounterMapper
 		extends Mapper<Object, Text, NullWritable, Text>{
@@ -41,6 +49,7 @@ public class CascadeSvm {
 			String dataStr = v_trainingData.toString();
 			String label = dataStr.substring(0, dataStr.indexOf(" "));
 			
+			// TODO: Can only recognize labels with "+1" "-1" format...
 			if(label.equals("+1")){
 				context.getCounter("trainingDataStats","CLASS_1_COUNT").increment(1);
 			} else if(label.equals("-1")) {
@@ -50,6 +59,17 @@ public class CascadeSvm {
 			context.write(NullWritable.get(), v_trainingData);
 		}
 	}
+	
+	
+	/*
+	 * Reads records, and randomly assign a subsetId.
+	 * Reassigns a new random subsetId if the chosen subset has already collected the maximum
+	 * amount of records for the corresponding label type of the record being read.
+	 * 
+	 * Statistical counters used for each subset:
+	 * 		- SUBSET_(subsetId)_CLASS_1: The amount of records with label 1 already assigned to this subset.
+	 * 		- SUBSET_(subsetId)_CLASS_2: The amount of records with label 1 already assigned to this subset.
+	 */
 	
 	public static class PrePartitionerMapper
 		extends Mapper<Object, Text, IntWritable, Text>{
@@ -88,6 +108,13 @@ public class CascadeSvm {
 		}
 	}
 	
+	
+	/*
+	 * A simple identity reducer that outputs the records passed to it.
+	 * Each of these reducers will be fed records that is passed to the next layer of sub-SVM training mappers.
+	 * This reducer is also used in the actual cascade SVM training jobs.
+	 */
+	
 	public static class SubsetDataOutputReducer
 		extends Reducer<IntWritable, Text, NullWritable, Text>{
 		
@@ -98,6 +125,13 @@ public class CascadeSvm {
 		}
 	}
 
+	
+	/*
+	 * A refactorization of LIBSVM's implementation of reading and training a svm problem.
+	 * Mostly identical to the original implementation.
+	 * Used by SubSvmMapper, and LastLayerSvmModelOutputReducer.
+	 */
+	
 	private static class SvmTrainer {
 		private svm_problem prob;
 		private svm_parameter param;
@@ -189,6 +223,13 @@ public class CascadeSvm {
 		}
 	}
 
+	
+	/*
+	 * A refactorization of LIBSVM's implementation of reading and training a svm problem.
+	 * Mostly identical to the original implementation.
+	 * Used by SubSvmMapper, and LastLayerSvmModelOutputReducer.
+	 */
+	
 	public static class SubSvmMapper
 		extends Mapper<Object, Text, IntWritable, Text>{
 		
@@ -202,18 +243,17 @@ public class CascadeSvm {
 			SvmTrainer svmTrainer = new SvmTrainer(subsetRecords);
 			svm_model model = svmTrainer.train();
             
-            		int[] svIndices = model.sv_indices;
+            int[] svIndices = model.sv_indices;
             
-            		for(int i=0; i<svIndices.length; i++) {
-            			supportVector.set(subsetRecords[svIndices[i]-1]);
-            			int taskId = context.getTaskAttemptID().getTaskID().getId();
-            			partitionIndex.set((int)Math.floor(taskId/2));
-            			context.write(partitionIndex, supportVector);
-            		}
+            for(int i=0; i<svIndices.length; i++) {
+            	supportVector.set(subsetRecords[svIndices[i]-1]);
+            	int taskId = context.getTaskAttemptID().getTaskID().getId();
+            	partitionIndex.set((int)Math.floor(taskId/2));
+            	context.write(partitionIndex, supportVector);
+            }
 		}
 	}
 	
-
 
 	/*
 	 * This reducer will not be used for the current implementation.
@@ -245,6 +285,14 @@ public class CascadeSvm {
 		}
 	}
 	
+	
+	/*
+	 * The last layer in the cascade, we use this reducer instead of SubsetDataOutputReducer to simply just output
+	 * SVs for the next layer.
+	 * LastLayerSvmModelOutputReducer also uses prints the final trained SVM model
+	 * to a file in HDFS.
+	 */
+	
 	public static class LastLayerSvmModelOutputReducer
 		extends Reducer<IntWritable, Text, NullWritable, Text>{
 		
@@ -256,6 +304,8 @@ public class CascadeSvm {
 	                "linear","polynomial","rbf","sigmoid","precomputed"
 	    	};
 		
+		// An identical implementation of svm.svm_save_model in LIBSVM,
+		// different in that the file is saved to HDFS instead of a local path.
 		private void saveModelToHdfs(svm_model model, String pathStr, Context context){
 			try {
 				FileSystem fs = FileSystem.get(context.getConfiguration());
@@ -365,6 +415,12 @@ public class CascadeSvm {
             		}
 		}
 	}
+	
+	
+	/*
+	 * Utility functions for record passing.
+	 * TODO: Should be nested functions placed elsewhere...
+	 */
 	
 	private static double atof(String s) {
 		double d = Double.valueOf(s).doubleValue();
@@ -481,14 +537,7 @@ public class CascadeSvm {
 				cascadeJobs[jobItr].setReducerClass(LastLayerSvmModelOutputReducer.class);
 			}
 		}
-		
-		/*
-		for(int prepartitionJobItr = 0; prepartitionJobItr < prepartitionJobCount; prepartitionJobItr++){
-			System.out.println("===== Beginning training dataset prepartitioning phase" + (prepartitionJobItr+1) + " =====");
-			prepartitionJobs[prepartitionJobItr].waitForCompletion(true);
-		}
-		*/
-		
+
 		for(int jobItr = 0; jobItr < cascadeJobCount; jobItr++){
 			System.out.println("===== Beginning job for layer " + (jobItr+1) + " =====");
 			if(jobItr != cascadeJobCount-1){
