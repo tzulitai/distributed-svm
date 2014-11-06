@@ -148,40 +148,39 @@ public class CascadeSvm {
 		
 		private void configureSvmParameters() {
 			this.param = new svm_parameter();
-            // default values
-            this.param.svm_type = svm_parameter.C_SVC;
-            this.param.kernel_type = svm_parameter.RBF;
-            this.param.degree = 3;
-            this.param.gamma = 0;        // 1/num_features
-            this.param.coef0 = 0;
-            this.param.nu = 0.5;
-            this.param.cache_size = 100;
-            this.param.C = 1;
-            this.param.eps = 1e-3;
-            this.param.p = 0.1;
-            this.param.shrinking = 1;
-            this.param.probability = 0;
-            this.param.nr_weight = 0;
-            this.param.weight_label = new int[0];
-            this.param.weight = new double[0];
+
+            		// default values
+            		this.param.svm_type = svm_parameter.C_SVC;
+            		this.param.kernel_type = svm_parameter.RBF;
+            		this.param.degree = 3;
+            		this.param.gamma = 0;        // 1/num_features
+            		this.param.coef0 = 0;
+            		this.param.nu = 0.5;
+            		this.param.cache_size = 100;
+            		this.param.C = 1;
+            		this.param.eps = 1e-3;
+            		this.param.p = 0.1;
+            		this.param.shrinking = 1;
+            		this.param.probability = 0;
+            		this.param.nr_weight = 0;
+            		this.param.weight_label = new int[0];
+            		this.param.weight = new double[0];
             
-            if(this.param.gamma == 0 && this.max_index > 0)
-                this.param.gamma = 1.0/this.max_index;
+            		if(this.param.gamma == 0 && this.max_index > 0)
+                		this.param.gamma = 1.0/this.max_index;
             
-            if(this.param.kernel_type == svm_parameter.PRECOMPUTED)
-                for(int i=0;i<this.prob.l;i++)
-                {
-                        if (this.prob.x[i][0].index != 0)
-                        {
-                                System.err.print("Wrong kernel matrix: first column must be 0:sample_serial_number\n");
-                                System.exit(1);
-                        }
-                        if ((int)this.prob.x[i][0].value <= 0 || (int)this.prob.x[i][0].value > this.max_index)
-                        {
-                                System.err.print("Wrong input format: sample_serial_number out of range\n");
-                                System.exit(1);
-                        }
-                }
+            		if(this.param.kernel_type == svm_parameter.PRECOMPUTED)
+                		for(int i=0;i<this.prob.l;i++) {
+                        		if (this.prob.x[i][0].index != 0) {
+                                		System.err.print("Wrong kernel matrix: first column must be 0:sample_serial_number\n");
+                                		System.exit(1);
+                        		}
+
+                        		if ((int)this.prob.x[i][0].value <= 0 || (int)this.prob.x[i][0].value > this.max_index) {
+                                		System.err.print("Wrong input format: sample_serial_number out of range\n");
+                                		System.exit(1);
+                        		}
+                		}
 		}
 		
 		public svm_model train(){
@@ -199,25 +198,29 @@ public class CascadeSvm {
 		public void map(Object offset, Text wholeSubset,
 						Context context) throws IOException, InterruptedException {
 			String[] subsetRecords = wholeSubset.toString().split("\n");
-			for(int itr=0; itr<subsetRecords.length; itr++) {
-				System.out.println(itr);
-			}
 			
 			SvmTrainer svmTrainer = new SvmTrainer(subsetRecords);
 			svm_model model = svmTrainer.train();
             
-            int[] svIndices = model.sv_indices;
+            		int[] svIndices = model.sv_indices;
             
-            for(int i=0; i<svIndices.length; i++) {
-            	supportVector.set(subsetRecords[svIndices[i]-1]);
-            	int taskId = context.getTaskAttemptID().getTaskID().getId();
-            	System.out.println("Task Id: " + taskId);
-            	partitionIndex.set((int)Math.floor(taskId/2));
-            	context.write(partitionIndex, supportVector);
-            }
+            		for(int i=0; i<svIndices.length; i++) {
+            			supportVector.set(subsetRecords[svIndices[i]-1]);
+            			int taskId = context.getTaskAttemptID().getTaskID().getId();
+            			partitionIndex.set((int)Math.floor(taskId/2));
+            			context.write(partitionIndex, supportVector);
+            		}
 		}
 	}
 	
+
+
+	/*
+	 * This reducer will not be used for the current implementation.
+	 * Reducers of each cascade layer will only act as mergers for the extracted SVs for the previous layer.
+	 * Will probably use this implementation, where reducers will also train SVM models, in future version.
+	 */
+
 	public static class SubSvmReducer
 		extends Reducer<IntWritable, Text, NullWritable, Text>{
 		
@@ -236,9 +239,9 @@ public class CascadeSvm {
 			int[] svIndices = model.sv_indices;
 			
 			for(int i=0; i<svIndices.length; i++) {
-            	supportVector.set(svRecords[svIndices[i]-1]);
-            	context.write(NullWritable.get(), supportVector);
-            }
+            			supportVector.set(svRecords[svIndices[i]-1]);
+            			context.write(NullWritable.get(), supportVector);
+            		}
 		}
 	}
 	
@@ -246,12 +249,12 @@ public class CascadeSvm {
 		extends Reducer<IntWritable, Text, NullWritable, Text>{
 		
 		private static final String svm_type_table[] = {
-	                "c_svc","nu_svc","one_class","epsilon_svr","nu_svr",
-	    };
+	        	"c_svc","nu_svc","one_class","epsilon_svr","nu_svr",
+	    	};
 
 		static final String kernel_type_table[]= {
 	                "linear","polynomial","rbf","sigmoid","precomputed"
-	    };
+	    	};
 		
 		private void saveModelToHdfs(svm_model model, String pathStr, Context context){
 			try {
@@ -277,62 +280,62 @@ public class CascadeSvm {
 		            		fos.writeBytes("coef0 "+param.coef0+"\n");
 				
 				int nr_class = model.nr_class;
-                int l = model.l;
-                fos.writeBytes("nr_class "+nr_class+"\n");
-                fos.writeBytes("total_sv "+l+"\n");
+                		int l = model.l;
+                		fos.writeBytes("nr_class "+nr_class+"\n");
+                		fos.writeBytes("total_sv "+l+"\n");
                 
-                fos.writeBytes("rho");
-                for(int i=0;i<nr_class*(nr_class-1)/2;i++)
-                        fos.writeBytes(" "+model.rho[i]);
-                fos.writeBytes("\n");
+                		fos.writeBytes("rho");
+                		for(int i=0;i<nr_class*(nr_class-1)/2;i++)
+                        		fos.writeBytes(" "+model.rho[i]);
+                		fos.writeBytes("\n");
                 
-                if(model.label != null) {
-                	fos.writeBytes("label");
-                    for(int i=0;i<nr_class;i++)
-                    	fos.writeBytes(" "+model.label[i]);
-                    fos.writeBytes("\n");
-                }
+                		if(model.label != null) {
+                			fos.writeBytes("label");
+                    			for(int i=0;i<nr_class;i++)
+                    				fos.writeBytes(" "+model.label[i]);
+                    			fos.writeBytes("\n");
+                		}
                 
-                if(model.probA != null) { // regression has probA only
-                    fos.writeBytes("probA");
-                    for(int i=0;i<nr_class*(nr_class-1)/2;i++)
-                    	fos.writeBytes(" "+model.probA[i]);
-                    fos.writeBytes("\n");
-                }
+                		if(model.probA != null) { // regression has probA only
+                    			fos.writeBytes("probA");
+                    			for(int i=0;i<nr_class*(nr_class-1)/2;i++)
+                    				fos.writeBytes(" "+model.probA[i]);
+                    			fos.writeBytes("\n");
+                		}
                 
-                if(model.probB != null) {
-                    fos.writeBytes("probB");
-                    for(int i=0;i<nr_class*(nr_class-1)/2;i++)
-                        fos.writeBytes(" "+model.probB[i]);
-                    fos.writeBytes("\n");
-                }
+                		if(model.probB != null) {
+                    			fos.writeBytes("probB");
+                    			for(int i=0;i<nr_class*(nr_class-1)/2;i++)
+                        			fos.writeBytes(" "+model.probB[i]);
+                    			fos.writeBytes("\n");
+                		}
                 
-                if(model.nSV != null)
-                {
-                    fos.writeBytes("nr_sv");
-                    for(int i=0;i<nr_class;i++)
-                        fos.writeBytes(" "+model.nSV[i]);
-                    fos.writeBytes("\n");
-                }
+                		if(model.nSV != null) {
+                    			fos.writeBytes("nr_sv");
+                    			for(int i=0;i<nr_class;i++)
+                        			fos.writeBytes(" "+model.nSV[i]);
+                    			fos.writeBytes("\n");
+                		}
                 
-                fos.writeBytes("SV\n");
-                double[][] sv_coef = model.sv_coef;
-                svm_node[][] SV = model.SV;
+                		fos.writeBytes("SV\n");
+                		double[][] sv_coef = model.sv_coef;
+                		svm_node[][] SV = model.SV;
                 
-                for(int i=0;i<l;i++) {
-                	for(int j=0;j<nr_class-1;j++)
-                		fos.writeBytes(sv_coef[j][i]+" ");
+                		for(int i=0;i<l;i++) {
+                			for(int j=0;j<nr_class-1;j++)
+                				fos.writeBytes(sv_coef[j][i]+" ");
 
-                    svm_node[] p = SV[i];
-                    if(param.kernel_type == svm_parameter.PRECOMPUTED)
-                    	fos.writeBytes("0:"+(int)(p[0].value));
-                    else
-                    	for(int j=0;j<p.length;j++)
-                    		fos.writeBytes(p[j].index+":"+p[j].value+" ");
-                    fos.writeBytes("\n");
-                }
+                    			svm_node[] p = SV[i];
+                    			if(param.kernel_type == svm_parameter.PRECOMPUTED)
+                    				fos.writeBytes("0:"+(int)(p[0].value));
+                    			else
+                    				for(int j=0;j<p.length;j++)
+                    					fos.writeBytes(p[j].index+":"+p[j].value+" ");
+                    			fos.writeBytes("\n");
+                		}
                 
-                fos.close();
+                		fos.close();
+
 			} catch (IOException ioe) {
 				throw new RuntimeException(ioe);
 			}
@@ -354,37 +357,30 @@ public class CascadeSvm {
 			String userOutputPathStr = context.getConfiguration().get("USER_OUTPUT_PATH");
 			saveModelToHdfs(model,userOutputPathStr,context);
             
-            int[] svIndices = model.sv_indices;
+            		int[] svIndices = model.sv_indices;
             
-            for(int i=0; i<svIndices.length; i++) {
-            	supportVector.set(svRecords[svIndices[i]-1]);
-            	context.write(NullWritable.get(), supportVector);
-            }
+            		for(int i=0; i<svIndices.length; i++) {
+            			supportVector.set(svRecords[svIndices[i]-1]);
+            			context.write(NullWritable.get(), supportVector);
+            		}
 		}
 	}
 	
-	private static double atof(String s){
+	private static double atof(String s) {
 		double d = Double.valueOf(s).doubleValue();
-		if (Double.isNaN(d) || Double.isInfinite(d))
-        {
-                System.err.print("NaN or Infinity in training data input\n");
-                System.exit(1);
-        }
+		if (Double.isNaN(d) || Double.isInfinite(d)) {
+                	System.err.print("NaN or Infinity in training data input\n");
+                	System.exit(1);
+        	}
+		
 		return d;
 	}
 	
-	private static int atoi(String s){
+	private static int atoi(String s) {
 		return Integer.parseInt(s);
 	}
 	
 	public static void main(String[] args) throws Exception {
-		
-		final String TMP_PREFIX = "cascade-svm-tmp/";
-		/*
-		Configuration dfsConf = new Configuration();
-		FileSystem fs = FileSystem.get(dfsConf);
-		fs.mkdirs(new Path(TMP_PREFIX));
-		*/
 		
 		Configuration firstConf = new Configuration();
 		String[] otherArgs = new GenericOptionsParser(firstConf, args).getRemainingArgs();
