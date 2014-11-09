@@ -8,6 +8,7 @@
   <description>Distributed SVM approaches implemented with MapReduce</description>
   <modules>
   	<module>cascade-svm-mr</module>
+  	<module>bagging-svm-mr</module>
   </modules>
   <dependencies>
   	<dependency>
