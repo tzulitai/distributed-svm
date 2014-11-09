@@ -452,7 +452,7 @@ public class CascadeSvm {
 			System.exit(2);
 		}
 		
-		firstConf.setInt("SUBSET_COUNT",(int)subsets);
+		firstConf.setInt("SUBSET_COUNT",(int)subsets);	// set a Int global value
 		
 		final int prepartitionJobCount = 2;
 		final int cascadeJobCount = (int)(Math.log(subsets)/Math.log(2));
@@ -476,7 +476,7 @@ public class CascadeSvm {
 		
 		prepartitionJobs[0] = new Job(prepartitionConfs[0], "Cascade SVM: Partitioning training data, Phase 1");
 		prepartitionJobs[0].setJarByClass(CascadeSvm.class);
-		prepartitionJobs[0].setNumReduceTasks(0);
+		prepartitionJobs[0].setNumReduceTasks(0);	// map-only job
 		prepartitionJobs[0].setMapperClass(PreStatCounterMapper.class);
 		prepartitionJobs[0].setOutputKeyClass(NullWritable.class);
 		prepartitionJobs[0].setOutputValueClass(Text.class);
@@ -492,8 +492,6 @@ public class CascadeSvm {
 		prepartitionConfs[1].setInt("CLASS_2_COUNT",
 				(int)prepartitionJobs[0].getCounters().findCounter("trainingDataStats","CLASS_2_COUNT").getValue());
 		
-		prepartitionConfs[1].setInt("SUBSET_COUNT",(int)subsets);
-		prepartitionConfs[1].setInt("SUBSET_COUNT",(int)subsets);
 		prepartitionJobs[1] = new Job(prepartitionConfs[1], "Cascade SVM: Partitioning training data, Phase 2");
 		prepartitionJobs[1].setJarByClass(CascadeSvm.class);
 		prepartitionJobs[1].setNumReduceTasks((int)subsets);
